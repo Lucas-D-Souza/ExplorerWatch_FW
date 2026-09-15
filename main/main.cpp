@@ -217,30 +217,9 @@ static esp_err_t api_delete_handler(httpd_req_t *req) {
 }
 
 static esp_err_t api_mkdir_handler(httpd_req_t *req) {
-    char dir_path[256] = "";
-    size_t buf_len = httpd_req_get_url_query_len(req) + 1;
-    if (buf_len > 1) {
-        char *buf = (char *)malloc(buf_len);
-        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-            char param[256];
-            if (httpd_query_key_value(buf, "path", param, sizeof(param)) == ESP_OK) {
-                 char* decoded = urldecode(param);
-                 strncpy(dir_path, decoded, sizeof(dir_path));
-                 free(decoded);
-            }
-        }
-        free(buf);
-    }
-    
-    // Cria a pasta de forma limpa e natural
-    mkdir(dir_path, 0777);
-    
-    // ATRASO DE SEGURANÇA: Dá meio segundo para o Cartão SD consolidar a 
-    // Tabela FAT fisicamente antes que qualquer upload seja iniciado.
-    vTaskDelay(pdMS_TO_TICKS(500)); 
-    
-    httpd_resp_sendstr(req, "Diretorio Criado");
-    return ESP_OK;
+    // DESATIVADO TEMPORARIAMENTE DEVIDO A BUG DE CORRUPÇÃO FAT32 VIA SPI
+    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, "Criação de pastas desativada.");
+    return ESP_FAIL;
 }
 
 static esp_err_t api_rename_handler(httpd_req_t *req) {
