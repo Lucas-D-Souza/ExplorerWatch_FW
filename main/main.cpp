@@ -16,8 +16,9 @@
 #include <sys/param.h>
 #include <ctype.h>
 #include <unistd.h>
-#include <stdlib.h>  // ADICIONADO: Necessário em C++ para malloc() e free()
-#include <stdio.h>   // ADICIONADO: Necessário em C++ para fopen() e snprintf()
+#include <stdlib.h>
+#include <stdio.h>
+#include "esp_heap_caps.h"
 
 static const char *TAG = "ExplorerFW";
 #define BOOT_BTN_PIN GPIO_NUM_0
@@ -171,30 +172,25 @@ static esp_err_t api_upload_handler(httpd_req_t *req) {
     FILE *f = fopen(file_path, "wb");
     if (!f) return ESP_FAIL;
 
-    // Buffer alinhado com o barramento SPI (4KB)
-    char *recv_buf = (char *)malloc(4096); 
+    // O SEGREDO DOS FIRMWARES MADUROS: Buffer cravado em 8KB, forçado na RAM INTERNA (SRAM) e pronto para DMA.
+    char *recv_buf = (char *)heap_caps_malloc(8192, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); 
     if (!recv_buf) { fclose(f); return ESP_FAIL; }
 
     int remaining = req->content_len;
     while (remaining > 0) {
-        int received = httpd_req_recv(req, recv_buf, MIN(remaining, 4096));
+        int received = httpd_req_recv(req, recv_buf, MIN(remaining, 8192));
         if (received <= 0) {
             if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
             break;
         }
         fwrite(recv_buf, 1, received, f);
         remaining -= received;
-        
-        // PREVENÇÃO DE BROWNOUT: Dá 5ms para o Cartão SD gravar a página 
-        // física sem causar pico de corrente.
-        vTaskDelay(pdMS_TO_TICKS(5));
     }
 
-    fflush(f);
-    fsync(fileno(f)); 
     fclose(f);
     
-    free(recv_buf);
+    // Libera a memória usando o comando especial de hardware
+    heap_caps_free(recv_buf); 
     httpd_resp_sendstr(req, "Upload Concluido");
     return ESP_OK;
 }
@@ -290,21 +286,21 @@ static esp_err_t api_download_handler(httpd_req_t *req) {
     if (ext) {
         if (strcasecmp(ext, ".json") == 0 || strcasecmp(ext, ".txt") == 0) httpd_resp_set_type(req, "text/plain");
         else if (strcasecmp(ext, ".png") == 0) httpd_resp_set_type(req, "image/png");
-        else if (strcasecmp(ext, ".jpg") == 0) httpd_resp_set_type(req, "image/jpeg");
+        else if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0) httpd_resp_set_type(req, "image/jpeg");
         else httpd_resp_set_type(req, "application/octet-stream"); 
     } else {
         httpd_resp_set_type(req, "application/octet-stream");
     }
 
-    char *http_buf = (char *)malloc(32768);
+    // Mesmo escudo de hardware para o download
+    char *http_buf = (char *)heap_caps_malloc(8192, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (http_buf) {
         size_t len;
-        while ((len = fread(http_buf, 1, 32768, fp)) > 0) {
+        while ((len = fread(http_buf, 1, 8192, fp)) > 0) {
             httpd_resp_send_chunk(req, http_buf, len);
-            vTaskDelay(1);
         }
         httpd_resp_send_chunk(req, NULL, 0); 
-        free(http_buf);
+        heap_caps_free(http_buf);
     }
     fclose(fp);
     return ESP_OK;
