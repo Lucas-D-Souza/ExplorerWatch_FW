@@ -30,7 +30,7 @@ esp_err_t SdUsbManager::init_local_storage() {
     bus_cfg.sclk_io_num = PIN_NUM_CLK;
     bus_cfg.quadwp_io_num = -1;
     bus_cfg.quadhd_io_num = -1;
-    bus_cfg.max_transfer_sz = 4000;
+    bus_cfg.max_transfer_sz = 4096;
 
     // Inicializa no SPI3. Ignora se já estiver ligado.
     esp_err_t err = spi_bus_initialize((spi_host_device_t)host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
@@ -45,8 +45,8 @@ esp_err_t SdUsbManager::init_local_storage() {
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
     mount_config.format_if_mount_failed = false;
-    mount_config.max_files = 5;
-    mount_config.allocation_unit_size = 16 * 1024;
+    mount_config.max_files = 10;
+    // mount_config.allocation_unit_size = 16 * 1024;
 
     esp_err_t ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card);
 
