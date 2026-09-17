@@ -375,7 +375,37 @@ static void build_ui() {
     lv_obj_add_event_cb(btn_exit, [](lv_event_t *e){ return_to_factory(); }, LV_EVENT_CLICKED, NULL);
 }
 
+// ---------------------------------------------------------
+// HACK DE HARDWARE: Destrava o Barramento I2C após o Soft Reset (OTA)
+// ---------------------------------------------------------
+static void clear_i2c_bus(void) {
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT_OD;
+    io_conf.pin_bit_mask = (1ULL << GPIO_NUM_14) | (1ULL << GPIO_NUM_15);
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    gpio_config(&io_conf);
+
+    gpio_set_level(GPIO_NUM_15, 1); esp_rom_delay_us(100);
+    for (int i = 0; i < 9; i++) {
+        gpio_set_level(GPIO_NUM_14, 0); esp_rom_delay_us(100);
+        gpio_set_level(GPIO_NUM_14, 1); esp_rom_delay_us(100);
+    }
+    gpio_set_level(GPIO_NUM_15, 0); esp_rom_delay_us(100);
+    gpio_set_level(GPIO_NUM_14, 1); esp_rom_delay_us(100);
+    gpio_set_level(GPIO_NUM_15, 1); esp_rom_delay_us(100);
+
+    gpio_reset_pin(GPIO_NUM_14);
+    gpio_reset_pin(GPIO_NUM_15);
+}
+
 extern "C" void app_main(void) {
+    // 1. Destrava o Hardware que ficou preso do Factory Firmware
+    clear_i2c_bus();
+
+    // 2. Avisa ao Bootloader que o app funcionou e não deve sofrer Rollback
+    esp_ota_mark_app_valid_cancel_rollback();
+
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.mode = GPIO_MODE_INPUT;
@@ -383,7 +413,13 @@ extern "C" void app_main(void) {
     io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
     gpio_config(&io_conf);
 
-    nvs_flash_init();
+    // 3. Inicialização Segura do NVS (Evita o Pânico do Wi-Fi)
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
     bsp_display_start();
     bsp_display_lock(0);
     build_ui();

@@ -36,7 +36,7 @@
             <input type="file" id="upload-input" style="display: none;" multiple onchange="uploadFiles()">
             <button onclick="document.getElementById('upload-input').click()">☁️ Enviar Arquivo</button>
         </label>
-        <button class="btn-secondary" onclick="createFolder()">📁 Nova Pasta</button>
+        <button class="btn-secondary" style="display: none;" onclick="createFolder()">📁 Nova Pasta</button>
         <button class="btn-secondary" onclick="updateView(currentPath)">🔄 Atualizar</button>
         <span class="path-display" id="subtitle">/sdcard</span>
     </div>
